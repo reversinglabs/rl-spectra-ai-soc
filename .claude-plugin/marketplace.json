@@ -1,0 +1,24 @@
+{
+  "name": "rl-spectra-ai-soc",
+  "owner": {
+    "name": "ReversingLabs",
+    "email": "support@reversinglabs.com"
+  },
+  "plugins": [
+    {
+      "name": "rl-soc",
+      "source": "./plugins/rl-soc",
+      "description": "Multi-agent SOC threat-analysis workflow using ReversingLabs Spectra Intelligence via the rl-spectra-intel CLI — no MCP server required."
+    },
+    {
+      "name": "rl-soc-install",
+      "source": "./plugins/rl-soc-install",
+      "description": "Installs the rl-spectra-intel CLI from the ReversingLabs internal PyPI server. Run once before using rl-soc."
+    },
+    {
+      "name": "rl-soc-connect",
+      "source": "./plugins/rl-soc-connect",
+      "description": "Configures the rl-spectra-intel CLI with ReversingLabs credentials. Run after rl-soc-install and before rl-soc."
+    }
+  ]
+}
