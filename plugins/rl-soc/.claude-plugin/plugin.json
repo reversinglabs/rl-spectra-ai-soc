@@ -1,0 +1,22 @@
+{
+  "name": "rl-soc",
+  "version": "1.0.0",
+  "description": "Multi-agent SOC workflow for threat analysis via the rl-spectra-intel CLI. Takes a file, hash, or network indicator and runs triage, investigation, remediation guidance, and incident reporting using ReversingLabs Spectra Intelligence — no MCP server required.",
+  "author": {
+    "name": "ReversingLabs",
+    "url": "https://www.reversinglabs.com"
+  },
+  "homepage": "https://alt-gitlab.rl.lan/krohan/rl-soc-claude-plugins",
+  "repository": "https://alt-gitlab.rl.lan/krohan/rl-soc-claude-plugins",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "soc",
+    "threat-intel",
+    "reversinglabs",
+    "spectra-intelligence",
+    "incident-response",
+    "cli"
+  ],
+  "skills": "./skills"
+}

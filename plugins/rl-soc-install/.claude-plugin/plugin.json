@@ -1,0 +1,20 @@
+{
+  "name": "rl-soc-install",
+  "version": "1.0.0",
+  "description": "Installs the rl-spectra-intel CLI from the ReversingLabs internal PyPI server. Run this plugin once before using rl-soc.",
+  "author": {
+    "name": "ReversingLabs",
+    "url": "https://www.reversinglabs.com"
+  },
+  "homepage": "https://alt-gitlab.rl.lan/krohan/rl-soc-claude-plugins",
+  "repository": "https://alt-gitlab.rl.lan/krohan/rl-soc-claude-plugins",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "reversinglabs",
+    "spectra-intelligence",
+    "install",
+    "setup"
+  ],
+  "skills": "./skills"
+}

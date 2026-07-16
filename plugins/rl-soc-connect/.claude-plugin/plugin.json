@@ -1,0 +1,20 @@
+{
+  "name": "rl-soc-connect",
+  "version": "1.0.0",
+  "description": "Configures the rl-spectra-intel CLI with ReversingLabs credentials. Prompts for username, password, and optional host, then stores them via rl-spectra-intel --configure.",
+  "author": {
+    "name": "ReversingLabs",
+    "url": "https://www.reversinglabs.com"
+  },
+  "homepage": "https://alt-gitlab.rl.lan/krohan/rl-soc-claude-plugins",
+  "repository": "https://alt-gitlab.rl.lan/krohan/rl-soc-claude-plugins",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "reversinglabs",
+    "spectra-intelligence",
+    "configure",
+    "setup"
+  ],
+  "skills": "./skills"
+}
