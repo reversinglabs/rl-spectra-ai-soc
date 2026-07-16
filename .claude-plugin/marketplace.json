@@ -13,7 +13,7 @@
     {
       "name": "rl-soc-install",
       "source": "./plugins/rl-soc-install",
-      "description": "Installs the rl-spectra-intel CLI from the ReversingLabs internal PyPI server. Run once before using rl-soc."
+      "description": "Installs the rl-spectra-intel CLI in a python virtual environment. Run once before using rl-soc."
     },
     {
       "name": "rl-soc-connect",
