@@ -213,6 +213,10 @@ This file must be valid JSON, well-formed, and follow this schema exactly:
 ### Schema rules
 
 - Every field in the schema MUST appear. Use `null` for unknown values, not omission.
+- **SHA256 values must be the complete 64-character hex string.** Never write
+  abbreviated or ellipsis forms (e.g. `51af15ef…2fbc`). If an upstream agent
+  output only a truncated hash, record it as `null` and note the truncation in
+  the `notes` field of the corresponding indicator.
 - `indicators` array MUST contain every distinct IOC found across all phases. Deduplicate by value.
 - `tags` is an open list — use what's relevant. Common: `c2`, `dropper`, `payload`, `persistence`, `lateral-movement`, `data-exfil`, `phishing-infrastructure`, `command-and-control`.
 - All timestamps are ISO 8601 with timezone (e.g. `2026-05-26T14:30:00Z`).

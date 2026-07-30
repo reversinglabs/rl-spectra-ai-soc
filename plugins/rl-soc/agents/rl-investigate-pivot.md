@@ -43,6 +43,12 @@ the `Bash` tool.
   (exit code 1) or is not found (exit code 127), include the error in your output
   and stop. Do NOT invoke `rl-soc-connect` or any credential setup skill.
 - **Do NOT use any `rl-protect` skills or tools.**
+- **Never abbreviate SHA256 hashes.** Write every SHA256 hash as its full
+  64-character hex string. Never use ellipsis notation (e.g. `51af15ef…2fbc`
+  or `51af15ef...`). This applies everywhere in your output: Notable fields,
+  pivot result sample listings, certificate thumbprints, and all other sections.
+  If `advanced_search` returns a result and you record its hash, you MUST write
+  all 64 characters.
 
 ## Step 1 — Advanced search pivots
 
@@ -145,7 +151,7 @@ Return this exact structure:
 - Samples found: N
 - Classification breakdown: X malicious, Y suspicious, Z clean
 - Dominant families: <list>
-- Notable: <any standout related samples or campaigns>
+- Notable: <any standout related samples or campaigns — include full 64-char SHA256 hashes, never abbreviated>
 
 ### Pivot: <next pivot>
 ...
