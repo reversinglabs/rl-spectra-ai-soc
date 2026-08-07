@@ -73,19 +73,38 @@ attempts (use `sleep 5` between retries). If the sample is still not found after
 "Sample not yet indexed — dynamic analysis skipped; re-run rl-triage-sandbox
 after classification completes."
 
-## Step 2 — Start dynamic analysis (if missing)
+## Step 2 — Determine sandbox platform and start dynamic analysis (if missing)
+
+**For file/hash artifacts — determine the platform first:**
+
+Call `get_sample_overview` to retrieve the file type and architecture:
+```bash
+rl-spectra-intel get_sample_overview --args '{"hash_value": "<sha256>"}'
+```
+
+Select the platform using this mapping:
+
+| File type | Architecture | Platform |
+|---|---|---|
+| Starts with `PE` | any | `windows11` |
+| Starts with `ELF` | any | `linux` |
+| Starts with `MachO` | `arm` or `arm64` | `macos15` |
+| Starts with `MachO` | x86, x86_64, or unknown | `macos11` |
+| APK / Android | any | `android12` |
+| Unknown / other | any | `windows11` (default) |
+
+If `get_sample_overview` fails or file type is absent, default to `windows11`.
 
 Use a 60–90 second timeout instead of the default 200 seconds. This is enough
 to capture initial behaviors (process creation, network connections, file drops,
 registry writes) for most samples, and keeps triage fast. If deeper sandbox
 coverage is needed, investigation can re-detonate with a longer timeout.
 
-**For file/hash artifacts:**
 ```bash
-rl-spectra-intel start_dynamic_analysis --args '{"hash_value": "<sha256>", "timeout": 60, "platform": "windows11"}'
+rl-spectra-intel start_dynamic_analysis --args '{"hash_value": "<sha256>", "timeout": 60, "platform": "<selected_platform>"}'
 ```
 
-**For URL artifacts:**
+**For URL artifacts** (always use `windows11`):
 ```bash
 rl-spectra-intel start_dynamic_analysis --args '{"url": "<url>", "timeout": 60, "platform": "windows11"}'
 ```
@@ -118,6 +137,7 @@ Return this exact structure:
 ## Dynamic Analysis
 - **Status**: COMPLETE | IN_PROGRESS | STARTED_NOW | NOT_APPLICABLE
 - **Analysis ID**: <id or null>
+- **Platform**: <platform used, or "n/a" if analysis already existed>
 - **Note**: <any relevant context, e.g. "existing run had thin results">
 
 ## Auxiliary Analysis
