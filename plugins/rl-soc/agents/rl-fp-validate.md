@@ -19,15 +19,29 @@ the pipeline from wasting resources on benign files that trigger noisy detection
 You will make a small number of targeted Spectra Intelligence API calls to gather
 signal, then produce a structured FP assessment with per-signal scoring.
 
-All Spectra Intelligence calls are made via the `rl-spectra-intel` CLI using
-the `Bash` tool.
+All Spectra calls are made through the canonical `rl-soc-cli` command using the
+`Bash` tool. `rl-soc-cli` is a symlink (managed by `rl-soc-connect`) that points
+at the active endpoint's wrapper, so you always call the same command regardless
+of which ReversingLabs service — Spectra Intelligence or Spectra Analyze — is
+configured.
+
+**Endpoint and available tools.** The orchestrator passes two values:
+- `SPECTRA_SERVICE` — the active service name (`Spectra Intelligence` or
+  `Spectra Analyze`), for labeling only.
+- `AVAILABLE_TOOLS` — the set of tool names discovered at run start via
+  `rl-soc-cli --list-tools`.
+
+The tools this agent uses are normally available on both endpoints. Still, before
+calling any tool, confirm it is in `AVAILABLE_TOOLS`; if it is not, skip that
+call and note its absence (not an error). If `AVAILABLE_TOOLS` was not provided,
+attempt the call and treat an "unknown tool" error as a skip.
 
 ## CRITICAL CONSTRAINTS
 
-- **Use the `rl-spectra-intel` CLI via `Bash` for all Spectra calls.**
+- **Use the `rl-soc-cli` CLI via `Bash` for all Spectra calls.**
   Invocation pattern — always a single-line Bash call:
   ```bash
-  rl-spectra-intel <tool_name> --args '<json_kwargs>'
+  rl-soc-cli <tool_name> --args '<json_kwargs>'
   ```
   After every call, check the exit code:
   - **0** — success; stdout is JSON, parse it
@@ -44,7 +58,7 @@ the `Bash` tool.
 - **Only applicable to file/hash artifacts.** For network-only indicators (URL,
   IP, domain with no associated file), note this and skip signals that don't apply.
 - **Ignore analyst overrides entirely.** If `get_sample_overview` returns
-  `final_classification_reason: "analyst_sample_override"`, treat the Spectra
+  `classification_reason: "analyst_sample_override"`, treat the Spectra
   classification as absent. Do NOT use the override as a TP or FP signal in any
   form — not the classification direction, not the mere existence of the override,
   and not its persistence across re-scans. An analyst override is an administrative
@@ -66,7 +80,7 @@ behavioral or network corroboration is a strong FP indicator.
 
 - Fetch if not already in triage data:
   ```bash
-  rl-spectra-intel get_sample_overview --args '{"hash_value": "<sha256>"}'
+  rl-soc-cli get_sample_overview --args '{"hash_value": "<sha256>"}'
   ```
 - Count flagging vendors vs. total vendors. Consider vendor tier: major AV vendors
   (CrowdStrike, Defender, Sophos, Kaspersky, ESET, Symantec) carry more weight than
@@ -113,7 +127,7 @@ etc.) but the actual file type does not match that vendor's typical binaries (e.
 a 7-Zip SFX stub claiming to be Firefox), you MUST verify the certificate:
 
 ```bash
-rl-spectra-intel get_sample_overview --args '{"hash_value": "<sha256>"}'
+rl-soc-cli get_sample_overview --args '{"hash_value": "<sha256>"}'
 ```
 
 Check the signer field:
@@ -133,7 +147,7 @@ certificate — they do not spoof the original vendor's identity in the version 
 If the sample is signed, evaluate the certificate:
 
 ```bash
-rl-spectra-intel get_sample_overview --args '{"hash_value": "<sha256>"}'
+rl-soc-cli get_sample_overview --args '{"hash_value": "<sha256>"}'
 ```
 (check the signer field if not already retrieved)
 
@@ -145,15 +159,87 @@ rl-spectra-intel get_sample_overview --args '{"hash_value": "<sha256>"}'
 - Certificate signed other known-malicious samples (from triage cert data if available)
   → STRONG TP_INDICATOR
 
-### 5. Sample prevalence
-High prevalence across many machines is characteristic of legitimate software.
+### 5. Similarity-based prevalence proxy
 
-Check if prevalence data is available in the sample overview. If the file has been
-seen on millions of endpoints with predominantly clean verdicts, this is a FP indicator.
+True prevalence (machine-count data) is not available via the Spectra APIs.
+Use `get_sample_similarity` as a proxy — a high fraction of `known` (clean)
+similar samples suggests the code pattern is widely distributed legitimate
+software. Call it only if the sample is a file or hash artifact (not a network
+indicator).
 
-- Very high prevalence (millions of instances, mostly clean) → MODERATE FP_INDICATOR
-- Low prevalence (rare file, few known instances) → NEUTRAL to WEAK TP_INDICATOR
-- No prevalence data available → NEUTRAL
+Denominators:
+- **rha1** (PE/ELF/MachO): `total`   — this dimension has NO `unknown` bucket
+- **imphash** (PE only), **tlsh**, **ssdeep**: `sampled`
+
+Let m = (malicious + suspicious) / (denom - unknown)   # classified-only, comparable across dims
+Let u = unknown / denom                                # coverage signal only
+Let n = denom
+
+Buckets partition exactly (mal + susp + known + unknown == denom), so `known` is
+fully determined by m and u. Display it; do not gate on it.
+
+NOTE: tlsh/ssdeep `total_in_index` saturates at 1000. Treat 1000 as ">=1000,
+true size unknown". imphash and rha1 report true cluster sizes.
+
+Abstain on a dimension (report "no signal", do not score) when:
+- the dimension is absent or carries a `note` field, OR
+- n < 10, OR
+- u > 0.25 (cluster under-scanned; m not interpretable), OR
+- imphash n > 50,000, OR rha1 n > 250,000 (generic/collision bucket), OR
+- imphash matches a known non-discriminative value (.NET stub, packer stub,
+  benign-corpus prevalence above suppression floor), OR
+- rha1 with (last_seen - first_seen) < 30 days AND m <= 0.02 — no unknown bucket
+  exists to distinguish "clean" from "not yet scanned". FP purposes only; a young
+  rha1 cluster may still drive TP.
+
+Per-dimension scoring:
+
+rha1     FP if m <= 0.02       TP if m >= 0.25        weight: strong
+tlsh     FP if m <= 0.02       TP if m >= 0.60        weight: moderate
+imphash  FP: never alone       TP if m >= 0.80        weight: weak
+ssdeep   FP: never alone       TP: corroborate only   weight: display
+
+rha1 FP additionally requires corroboration from >=1 other non-abstained
+dimension. It is the only dimension that can report clean with no coverage
+telemetry behind it, so it may not close an alert alone. TP side needs no guard.
+
+ssdeep returns silently tiny or zero counts on block-size mismatch. A low ssdeep
+count means "not comparable", not "unrelated". Never let it drive a verdict.
+
+Small-cluster exception: 10 <= n < 50 with m >= 0.90 may corroborate TP, but may
+never produce FP and may never be the driving dimension.
+
+Size-conflict override: if the driving dimension's cluster is >10x the size of a
+disagreeing tighter dimension, the tighter dimension wins. A large rha1 or
+imphash bucket disagreeing with a benign-leaning tlsh neighborhood indicates a
+generic cluster, not a family. Report both and route to review.
+
+Mixed-cluster override (applies only when the verdict would otherwise be FP):
+if any scoreable dimension shows 0.05 <= m <= 0.50, suppress the FP verdict and
+flag for review. Characteristic of trojanized installers and abused signed
+binaries. Does not downgrade or dampen a TP verdict.
+
+Growth signal: on repeat queries of the same file, rising rha1 `total` with
+`last_seen` within hours indicates an active campaign. TP-leaning independent of
+the current fraction.
+
+Boundary stability: sampling is non-deterministic between calls. If any m lands
+within 0.03 of a threshold, report as borderline rather than crossing it.
+
+Combining: report the strongest non-abstained dimension as the verdict, subject
+to the size-conflict override. List others as corroborating or conflicting. Do
+not sum or average — the dimensions are highly correlated, since one repacked
+family member lights up rha1, tlsh, and imphash for the same underlying reason.
+
+Always emit: driving dimension, cluster size (noting 1000 = saturated), u when
+> 0.05, top family labels, and any conflict. Never emit an FP verdict on
+similarity alone.
+
+Scope: consume these signals only for alerts whose hypothesis is that the file
+itself is malicious (static/ML file verdicts, YARA hits, unknown-binary-executed,
+suspicious-download-written). Suppress entirely for behavioral, identity, and
+network detections — no similarity result on a legitimate binary can clear an
+alert about how that binary was used.
 
 ### 6. Behavioral corroboration
 Cross-check: does behavioral data corroborate the detection?
@@ -231,7 +317,7 @@ relationship as NEUTRAL rather than risk inverting the signal.
 
 Look up any hashes not already classified:
 ```bash
-rl-spectra-intel get_sample_overview --args '{"hash_value": "<hash>"}'
+rl-soc-cli get_sample_overview --args '{"hash_value": "<hash>"}'
 ```
 
 **Parent / container files** (UPSTREAM — where this sample came from):
@@ -260,7 +346,8 @@ a legitimate deployment path, the combined weight is stronger than either alone.
 
 Only make API calls for signals where triage data is insufficient. Do NOT re-fetch
 data that is already present in the triage handoff. Typical calls needed:
-- `get_sample_overview` for signer, prevalence, and AV vendor breakdown (if not in triage)
+- `get_sample_overview` for signer and AV vendor breakdown (if not in triage)
+- `get_sample_similarity` for the similarity-based prevalence proxy (Signal 5, file/hash artifacts only)
 - `get_sample_overview` for any parent/container hashes found in the triage handoff (Signal 9)
 
 ## Output — FP Validation Findings
@@ -281,7 +368,7 @@ Return this exact structure:
 | Threat name heuristics | ... | ... | ... |
 | Legit-tool-with-bad-rep | ... | ... | ... |
 | Signer reputation | ... | ... | ... |
-| Sample prevalence | ... | ... | ... |
+| Similarity prevalence proxy | ... | ... | ... |
 | Behavioral corroboration | ... | ... | ... |
 | Admin/build context | ... | ... | ... |
 | Rule quality | ... | ... | ... |

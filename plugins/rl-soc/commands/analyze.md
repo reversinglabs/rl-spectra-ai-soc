@@ -2,6 +2,19 @@
 
 Run the full SOC threat-analysis pipeline on a file, hash, URL, IP, or domain.
 
+## Endpoint
+
+The pipeline runs against whichever ReversingLabs service is configured —
+**Spectra Intelligence** or **Spectra Analyze** — through a single canonical
+command, `rl-soc-cli`. This is a symlink managed by `rl-soc-connect` that points
+at the active endpoint, so every phase calls one command name regardless of the
+service. To choose or switch the active endpoint, run `rl-soc-connect` and pick
+the service. Configure endpoints with the `rl-soc-install` and `rl-soc-connect`
+skills first. At the start of each run the pipeline discovers the active
+endpoint's tool surface via `rl-soc-cli --list-tools` and skips any unavailable
+tool with a note — so on Spectra Analyze, Intelligence-only tools (content
+inspection, certificate analytics, sandbox status polling) are simply skipped.
+
 ## Usage
 
 ```

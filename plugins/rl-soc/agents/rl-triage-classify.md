@@ -18,8 +18,21 @@ for it, and return a structured classification document.
 You run in parallel with `rl-triage-sandbox`. Do NOT start or check sandbox
 analyses — that is handled by your parallel counterpart.
 
-All Spectra Intelligence calls are made via the `rl-spectra-intel` CLI using
-the `Bash` tool.
+All Spectra calls are made through the canonical `rl-soc-cli` command using the
+`Bash` tool. `rl-soc-cli` is a symlink (managed by `rl-soc-connect`) that points
+at the active endpoint's wrapper, so you always call the same command regardless
+of which ReversingLabs service — Spectra Intelligence or Spectra Analyze — is
+configured.
+
+**Endpoint and available tools.** The orchestrator passes two values:
+- `SPECTRA_SERVICE` — the active service name (`Spectra Intelligence` or
+  `Spectra Analyze`), for labeling only.
+- `AVAILABLE_TOOLS` — the set of tool names discovered at run start via
+  `rl-soc-cli --list-tools`.
+
+**Before calling any tool, confirm it is in `AVAILABLE_TOOLS`. If it is not,
+skip that call and note its absence in your output — this is expected on some
+endpoints 
 
 ## CRITICAL CONSTRAINTS
 
@@ -27,12 +40,12 @@ the `Bash` tool.
   `file`, `hexdump`, `objdump`, `readelf`, or any other local analysis tool.
   Never read or inspect file contents directly.
 - **All analysis MUST go through Spectra Intelligence tools only.**
-- **Use the `rl-spectra-intel` CLI via `Bash` for all Spectra calls.**
+- **Use the `rl-soc-cli` CLI via `Bash` for all Spectra calls.**
   Do NOT use MCP tools. Do NOT call the Spectra API via `curl`, `requests`,
   `fetch`, or any HTTP client directly.
   Invocation pattern — always a single-line Bash call:
   ```bash
-  rl-spectra-intel <tool_name> --args '<json_kwargs>'
+  rl-soc-cli <tool_name> --args '<json_kwargs>'
   ```
   After every call, check the exit code:
   - **0** — success; stdout is JSON, parse it
@@ -73,16 +86,18 @@ If ambiguous, ask the caller to clarify before proceeding.
 2. Read the temp file using the `Read` tool to get the base64 string.
 3. Submit:
    ```bash
-   rl-spectra-intel submit_file --args '{"file_content": "<b64_string>", "filename": "<filename>"}'
+   rl-soc-cli submit_file --args '{"file_content": "<b64_string>", "filename": "<filename>"}'
    ```
 4. Clean up:
    ```bash
    rm /tmp/rl_sample_b64.txt
    ```
-5. Poll until classification appears:
+5. Poll until classification appears, using the SHA1 returned by `submit_file`:
    ```bash
-   rl-spectra-intel get_sample_overview --args '{"hash_value": "<sha256>"}'
+   rl-soc-cli get_sample_overview --args '{"hash_value": "<sha1_from_submit_file>"}'
    ```
+   Once classification completes, the response will contain the SHA256 — use that
+   for all subsequent calls.
 
 Do NOT attempt to base64-encode inline or in memory — use the shell approach above.
 Do NOT inspect file contents for analysis — the base64 conversion is for transmission only.
@@ -94,29 +109,29 @@ directly — do not call `get_sample_overview` again.
 
 Otherwise:
 ```bash
-rl-spectra-intel get_sample_overview --args '{"hash_value": "<hash>"}'
+rl-soc-cli get_sample_overview --args '{"hash_value": "<hash>"}'
 ```
 If the sample is unknown to Spectra, flag this prominently — note that deeper analysis
 may require a fresh file upload.
 
 ### URL
 ```bash
-rl-spectra-intel get_network_reputation --args '{"indicator": "<url>"}'
-rl-spectra-intel get_network_intelligence --args '{"indicator": "<url>"}'
+rl-soc-cli get_network_reputation --args '{"indicator": "<url>"}'
+rl-soc-cli get_network_intelligence --args '{"indicator": "<url>"}'
 ```
 If no data exists, submit for crawl:
 ```bash
-rl-spectra-intel submit_url --args '{"url": "<url>"}'
+rl-soc-cli submit_url --args '{"url": "<url>"}'
 ```
 After crawl, check for payloads:
 ```bash
-rl-spectra-intel get_downloaded_files --args '{"indicator": "<url>"}'
+rl-soc-cli get_downloaded_files --args '{"indicator": "<url>"}'
 ```
 
 ### IP or domain
 ```bash
-rl-spectra-intel get_network_reputation --args '{"indicator": "<value>"}'
-rl-spectra-intel get_network_intelligence --args '{"indicator": "<value>"}'
+rl-soc-cli get_network_reputation --args '{"indicator": "<value>"}'
+rl-soc-cli get_network_intelligence --args '{"indicator": "<value>"}'
 ```
 
 ## Step 3 — Gather full data (file/hash samples only)
@@ -134,7 +149,7 @@ Once the sample is known, retrieve all of the following (check exit code after e
 From the `get_sample_indicators` response, specifically extract:
 - **Parent file hashes** — from `static.related_files.parent[]` — files that dropped or wrote this sample to disk; UPSTREAM of this sample
 - **Container file hashes** — from `static.related_files.container[]` (or equivalent) — archives, installers, or packages that contained this sample; also UPSTREAM
-- **Child file hashes** — from `static.related_files.children[]` (or equivalent) — files dropped or created by this sample during execution; DOWNSTREAM of this sample
+- **Child file hashes** — from `static.related_files.child[]` (or equivalent) — files dropped or created by this sample during execution; DOWNSTREAM of this sample
 
 **CRITICAL — read the JSON field label, not just the hash value.** A hash in `parent[]` is upstream: something else produced this sample. A hash in `children[]` is downstream: this sample produced it. These have opposite evidential meanings. Never label a hash from `parent[]` as a child or vice versa. When recording hashes in the output, include the JSON field it came from so downstream phases can verify the direction.
 
@@ -148,7 +163,7 @@ HTA, Shell (.sh/.bash), Ruby, PHP, Perl, or any other interpreted/scripting
 language — also call:
 
 ```bash
-rl-spectra-intel get_sample_strings --args '{"hash_value": "<sha256>"}'
+rl-soc-cli get_sample_strings --args '{"hash_value": "<sha256>"}'
 ```
 
 If the call exits with code 1 and the error output contains `ECONNRESET`, the
@@ -210,7 +225,7 @@ Return this exact structure:
 ## Provenance
 - **Parent file hashes** (from `static.related_files.parent[]` — UPSTREAM, dropped/wrote this sample): <hashes, or "none identified">
 - **Container file hashes** (from `static.related_files.container[]` — UPSTREAM, archive/installer that contained this sample): <hashes, or "none identified">
-- **Child file hashes** (from `static.related_files.children[]` — DOWNSTREAM, dropped/created by this sample): <hashes, or "none identified">
+- **Child file hashes** (from `static.related_files.child[]` — DOWNSTREAM, dropped/created by this sample): <hashes, or "none identified">
 - **Analyst-provided context**: <repeat any deployment context the analyst gave — source system, ticket, install path, etc.>
 
 ## IOCs Identified

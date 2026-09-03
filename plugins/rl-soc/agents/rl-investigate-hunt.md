@@ -24,15 +24,27 @@ You run in parallel with `rl-investigate-enrich` and `rl-investigate-pivot`.
 Do NOT perform IOC bulk enrichment or sample pivots — those are handled by
 your parallel counterparts.
 
-All Spectra Intelligence calls are made via the `rl-spectra-intel` CLI using
-the `Bash` tool.
+All Spectra calls are made through the canonical `rl-soc-cli` command using the
+`Bash` tool. `rl-soc-cli` is a symlink (managed by `rl-soc-connect`) that points
+at the active endpoint's wrapper, so you always call the same command regardless
+of which ReversingLabs service — Spectra Intelligence or Spectra Analyze — is
+configured.
+
+**Endpoint and available tools.** The orchestrator passes two values:
+- `SPECTRA_SERVICE` — the active service name (`Spectra Intelligence` or
+  `Spectra Analyze`), for labeling only.
+- `AVAILABLE_TOOLS` — the set of tool names discovered at run start via
+  `rl-soc-cli --list-tools`.
+
+**Before calling any tool, confirm it is in `AVAILABLE_TOOLS`; if it is not, skip
+that call and note its absence (not an error).
 
 ## CRITICAL CONSTRAINTS
 
-- **Use the `rl-spectra-intel` CLI via `Bash` for all Spectra calls.**
+- **Use the `rl-soc-cli` CLI via `Bash` for all Spectra calls.**
   Invocation pattern — always a single-line Bash call:
   ```bash
-  rl-spectra-intel <tool_name> --args '<json_kwargs>'
+  rl-soc-cli <tool_name> --args '<json_kwargs>'
   ```
   After every call, check the exit code:
   - **0** — success; stdout is JSON, parse it
@@ -50,6 +62,16 @@ the `Bash` tool.
 
 ## Part A — YARA retrohunt
 
+**File-type gate**: Check the `SAMPLE_FILE_TYPE` field in the triage handoff before proceeding.
+
+- **Skip Part A entirely** (go directly to Part B) if:
+  - File type starts with `Archive/` (ZIP, GZIP, TAR, CAB, RAR, 7-Zip, MSI wrapper, etc.)
+  - Artifact is a network indicator (URL, IP, domain — no file type applies)
+
+  Container formats prevent meaningful static string matching without corpus-side unpacking; retrohunts on archive samples are almost always inconclusive. Note the skip in your output.
+
+- **Proceed** for all other types: `PE/*`, `ELF/*`, `MachO/*`, `Text/*`, `Document/*`, `Generic/Binary`, unknown. For `Text/*` files, strongly prefer unique string anchors (C2 URLs, specific file paths, unusual error messages) over generic code patterns — generic patterns produce rules that are too broad.
+
 Build a YARA rule targeting unique characteristics of the sample. Use a combination
 of the most discriminating features available from triage data:
 
@@ -63,18 +85,34 @@ unrelated families is less useful than a tight rule with 20 matches in the same
 threat cluster.
 
 1. Start the hunt with both live and retrohunt enabled:
+
+   **Spectra Intelligence** (`SPECTRA_SERVICE = "Spectra Intelligence"`):
    ```bash
-   rl-spectra-intel yara_hunt_start --args '{"ruleset_name": "<name>", "ruleset_content": "<rule_text>", "retro": true}'
+   rl-soc-cli yara_hunt_start --args '{"ruleset_name": "<name>", "ruleset_content": "<rule_text>", "retro": true}'
    ```
+
+   **Spectra Analyze** (`SPECTRA_SERVICE = "Spectra Analyze"`):
+   ```bash
+   rl-soc-cli yara_hunt_start --args '{"ruleset_name": "<name>", "ruleset_content": "<rule_text>", "local_live": true, "local_retro": true, "cloud_live": true, "cloud_retro": true}'
+   ```
+
    A single call starts both hunts. If the retro portion returns 403, the account
    lacks retrohunt permissions — note this and proceed with live hunt results only.
    Do NOT make a separate retrohunt call; do NOT treat a retro 403 as a hard stop.
 
-2. Poll for results (up to 3 times). On the first call, use the `started_at` value
-   from the `yara_hunt_start` response as both timestamp arguments. On subsequent
-   calls, use `last_timestamp` from the previous response:
+2. Poll for results (up to 3 times).
+
+   **Spectra Intelligence** (`SPECTRA_SERVICE = "Spectra Intelligence"`): on the
+   first call use the `started_at` value from the `yara_hunt_start` response as
+   both timestamp arguments; on subsequent calls use `last_timestamp` from the
+   previous response:
    ```bash
-   rl-spectra-intel yara_hunt_status_and_matches --args '{"ruleset_name": "<name>", "since_live": <started_at>, "since_retro": <started_at>}'
+   rl-soc-cli yara_hunt_status_and_matches --args '{"ruleset_name": "<name>", "since_live": <started_at>, "since_retro": <started_at>}'
+   ```
+
+   **Spectra Analyze** (`SPECTRA_SERVICE = "Spectra Analyze"`):
+   ```bash
+   rl-soc-cli yara_hunt_status_and_matches --args '{"ruleset_name": "<name>"}'
    ```
 
 3. If results are available, analyze the match set:
@@ -84,7 +122,7 @@ threat cluster.
 
 4. Clean up:
    ```bash
-   rl-spectra-intel yara_hunt_delete --args '{"ruleset_name": "<name>"}'
+   rl-soc-cli yara_hunt_delete --args '{"ruleset_name": "<name>"}'
    ```
 
 ## Part B — Poll in-flight dynamic and auxiliary analyses
@@ -96,24 +134,37 @@ Poll these while the YARA hunt is running or after it completes.
 deep static analysis — it is NOT a sandbox run and does NOT produce behavioral
 observations. Their results are independent and must not be conflated.
 
-For each in-flight ID:
+Poll dynamic and auxiliary analyses with **different tools** — do NOT conflate them.
+
+### Dynamic (sandbox) analysis IDs
 
 1. Poll status (repeat up to 3 times, interleaving with YARA poll if needed):
    ```bash
-   rl-spectra-intel get_dynamic_analysis_status --args '{"hash_value": "<sha256>", "analysis_id": "<id>"}'
+   rl-soc-cli get_dynamic_analysis_status --args '{"hash_value": "<sha256>", "analysis_id": "<id>"}'
    ```
 
 2. If complete, retrieve results:
    ```bash
-   rl-spectra-intel get_sample_behavior --args '{"hash_value": "<sha256>"}'
+   rl-soc-cli get_sample_behavior --args '{"hash_value": "<sha256>"}'
    ```
 
 3. If still running after 3 polls, note as TIMED OUT — do not block.
 
-**Auxiliary-specific note**: Auxiliary analysis results do not expire once available.
-If an auxiliary poll returns 404, the analysis is still in progress — continue polling
-(up to the 3-poll limit). If auxiliary is still returning 404 after 3 polls, record
-the status as TIMED_OUT and move on.
+### Auxiliary (deep static) analysis
+
+Auxiliary analysis is NOT a sandbox run and is NOT tracked by
+`get_dynamic_analysis_status`. **Do NOT call `get_dynamic_analysis_status` (or
+`get_sample_behavior`) for auxiliary analysis.** Instead read auxiliary/deep-static
+results from the sample overview, which is supported on **both** endpoints:
+
+```bash
+rl-soc-cli get_sample_overview --args '{"hash_value": "<sha256>"}'
+```
+
+Auxiliary results do not expire once available. If the overview does not yet
+contain auxiliary results, the analysis is still in progress — re-check (up to the
+3-poll limit). If still absent after 3 polls, record the status as TIMED_OUT and
+move on.
 
 **Sandbox quality assessment**: Before interpreting behavioral results, check for
 these indicators of failed or unreliable detonation:
@@ -173,25 +224,26 @@ Return this exact structure:
 
 ## YARA Hunt
 
+- **Skipped**: YES (archive/container format or network indicator) | NO
 - **Rule summary**: <one sentence describing what unique characteristics it targets>
 - **Rule** (abbreviated): <first few lines of the rule for reference>
 - **Hunt ID**: <id>
 - **Live hunt status**: COMPLETE | TIMED_OUT
 - **Live hunt match count**: N samples
-- **Retrohunt status**: COMPLETE | TIMED_OUT | BLOCKED (403 — account lacks retrohunt permissions)
-- **Retrohunt match count**: N samples (or N/A if blocked)
+- **Retrohunt status**: COMPLETE | TIMED_OUT | BLOCKED (403 — account lacks retrohunt permissions) | SKIPPED
+- **Retrohunt match count**: N samples (or N/A if blocked/skipped)
 - **Combined classification breakdown**: X malicious, Y suspicious, Z clean
 - **Top threat families**:
   - <Family name>: N samples
   - ...
-- **Rule quality assessment**: SPECIFIC | ACCEPTABLE | TOO_BROAD
+- **Rule quality assessment**: SPECIFIC | ACCEPTABLE | TOO_BROAD | N/A
 - **Note**: <any issues with the rule or recommendations for refinement>
 
 ## Summary
 - Dynamic sandbox data available: YES / NO / PARTIAL
 - Auxiliary static analysis data available: YES / NO
 - New behavioral indicators from dynamic sandbox: <key findings or "none">
-- YARA hunt matches: N samples across M families (live: N, retro: N or BLOCKED)
+- YARA hunt matches: N samples across M families (live: N, retro: N or BLOCKED/SKIPPED)
 - Most significant finding: <one sentence>
 
 ## Usage Estimate

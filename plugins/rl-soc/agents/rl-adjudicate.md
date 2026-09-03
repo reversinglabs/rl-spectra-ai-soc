@@ -42,15 +42,15 @@ even if the FP validator didn't flag it strongly.
 
 ## Input data caveats
 
-Before weighing any signal, check the triage handoff for `final_classification_reason`
+Before weighing any signal, check the triage handoff for `classification_reason`
 from `get_sample_overview`:
 
-- If `final_classification_reason` is **`analyst_sample_override`**: the RCA2
+- If `classification_reason` is **`analyst_sample_override`**: the RCA2
   classification (MALICIOUS / SUSPICIOUS / KNOWN) was set manually by a human
   analyst. **Ignore it entirely.** Do not list it as a TP or FP signal in the
   audit trail. Base the verdict solely on AV detections, sandbox behavior,
   network IOCs, certificate data, related samples, and other objective signals.
-- For all other `final_classification_reason` values: treat the RCA2
+- For all other `classification_reason` values: treat the RCA2
   classification normally as a signal in your assessment.
 
 - **"infected"-password ZIP delivery is NEUTRAL.** The passwords `infected` and
@@ -125,7 +125,7 @@ from `get_sample_overview`:
 
 - **Spectra-aggregated threat names require vendor-attribution verification.**
   Before treating a threat name as a strong TP signal, check whether any AV vendor
-  actually named that family — via TCA-0103 historical AV results or the raw vendor
+  actually named that family — via `threat_names` from the output of `get_sample_overview` or the raw vendor
   detections in triage. If the underlying vendor verdicts are generic ("detected",
   "virus", "suspicious" with no family name), the threat name is Spectra's own derived
   label, not multi-vendor attributed. In that case:

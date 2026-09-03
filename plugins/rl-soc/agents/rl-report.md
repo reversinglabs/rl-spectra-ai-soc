@@ -28,8 +28,11 @@ investigation already produced a clear, complete picture. Never call it more
 than once. Check the exit code: 0 = success, 1 = API error (surface stderr to
 orchestrator), 2 = bad args.
 
+Call this through the canonical `rl-soc-cli` command (a symlink managed by
+`rl-soc-connect` that resolves to the active endpoint).
+
 ```bash
-rl-spectra-intel enhanced_threat_analysis --args '{"hash_value": "<sha256>"}'
+rl-soc-cli enhanced_threat_analysis --args '{"hash": "<sha256>"}'
 ```
 
 You WRITE these two files to the current working directory. These are the

@@ -8,17 +8,17 @@
     {
       "name": "rl-soc",
       "source": "./plugins/rl-soc",
-      "description": "Multi-agent SOC threat-analysis workflow using ReversingLabs Spectra Intelligence via the rl-spectra-intel CLI — no MCP server required."
+      "description": "Multi-agent SOC threat-analysis workflow using ReversingLabs Spectra Intelligence or Spectra Analyze via the appropriate CLI."
     },
     {
       "name": "rl-soc-install",
       "source": "./plugins/rl-soc-install",
-      "description": "Installs the rl-spectra-intel CLI in a python virtual environment. Run once before using rl-soc."
+      "description": "Installs a ReversingLabs CLI service (Spectra Intelligence or Spectra Analyze) and installs the matching CLI. Run once before using rl-soc."
     },
     {
       "name": "rl-soc-connect",
       "source": "./plugins/rl-soc-connect",
-      "description": "Configures the rl-spectra-intel CLI with ReversingLabs credentials. Run after rl-soc-install and before rl-soc."
+      "description": "Configures a ReversingLabs SOC CLI. Prompts for the service (Spectra Intelligence or Spectra Analyze) and writes the matching config. Run after rl-soc-install and before rl-soc."
     }
   ]
 }
