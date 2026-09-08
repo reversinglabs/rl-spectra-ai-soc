@@ -1,7 +1,7 @@
 {
   "name": "rl-soc-connect",
-  "version": "1.0.0",
-  "description": "Configures the rl-spectra-intel CLI with ReversingLabs credentials. Prompts for username, password, and optional host, then stores them via rl-spectra-intel --configure.",
+  "version": "1.2.0",
+  "description": "Configures a ReversingLabs SOC CLI. Prompts for the service — Spectra Intelligence (username/password) or Spectra Analyze (appliance URL + API token) — then writes the matching config and a PATH wrapper. Run after rl-soc-install.",
   "author": {
     "name": "ReversingLabs",
     "url": "https://www.reversinglabs.com"

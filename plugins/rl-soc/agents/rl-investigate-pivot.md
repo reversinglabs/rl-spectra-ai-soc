@@ -20,15 +20,28 @@ You run in parallel with `rl-investigate-enrich` and `rl-investigate-hunt`.
 Do NOT perform IOC bulk enrichment, YARA hunts, or sandbox polling — those
 are handled by your parallel counterparts.
 
-All Spectra Intelligence calls are made via the `rl-spectra-intel` CLI using
-the `Bash` tool.
+All Spectra calls are made through the canonical `rl-soc-cli` command using the
+`Bash` tool. `rl-soc-cli` is a symlink (managed by `rl-soc-connect`) that points
+at the active endpoint's wrapper, so you always call the same command regardless
+of which ReversingLabs service — Spectra Intelligence or Spectra Analyze — is
+configured.
+
+**Endpoint and available tools.** The orchestrator passes two values:
+- `SPECTRA_SERVICE` — the active service name (`Spectra Intelligence` or
+  `Spectra Analyze`), for labeling only.
+- `AVAILABLE_TOOLS` — the set of tool names discovered at run start via
+  `rl-soc-cli --list-tools`.
+
+**Before calling any tool, confirm it is in `AVAILABLE_TOOLS`. If it is not,
+skip that call and note its absence in your output — this is expected on some
+endpoints 
 
 ## CRITICAL CONSTRAINTS
 
-- **Use the `rl-spectra-intel` CLI via `Bash` for all Spectra calls.**
+- **Use the `rl-soc-cli` CLI via `Bash` for all Spectra calls.**
   Invocation pattern — always a single-line Bash call:
   ```bash
-  rl-spectra-intel <tool_name> --args '<json_kwargs>'
+  rl-soc-cli <tool_name> --args '<json_kwargs>'
   ```
   After every call, check the exit code:
   - **0** — success; stdout is JSON, parse it
@@ -55,7 +68,7 @@ the `Bash` tool.
 Based on triage classification data, run targeted pivots using:
 
 ```bash
-rl-spectra-intel advanced_search --args '{"query": "<selector>", "records_per_page": 20}'
+rl-soc-cli advanced_search --args '{"query": "<selector>"}'
 ```
 
 **Query syntax notes:**                                                                                                                                                                           
@@ -100,7 +113,7 @@ sample's file content tree in the triage handoff.
 If triage identified the sample as a PE, ELF, or MACH-O executable:
 
 ```bash
-rl-spectra-intel get_sample_similarity --args '{"hash_value": "<sha256>"}'
+rl-soc-cli get_sample_similarity --args '{"hash_value": "<sha256>"}'
 ```
 
 The response provides two similarity dimensions:
@@ -125,13 +138,13 @@ Interpret each dimension:
 If triage identified a certificate thumbprint or signer:
 
 ```bash
-rl-spectra-intel get_certificate_analytics --args '{"thumbprints": "<thumbprint>"}'
+rl-soc-cli get_certificate_analytics --args '{"thumbprints": "<thumbprint>"}'
 ```
 
 If the signer CN is known but no thumbprint:
 
 ```bash
-rl-spectra-intel search_certificate_thumbprints --args '{"common_name": "<cn>"}'
+rl-soc-cli search_certificate_thumbprints --args '{"common_name": "<cn>"}'
 ```
 
 Look for: how many other samples signed by this cert are malicious? If a cert

@@ -19,15 +19,28 @@ You run in parallel with `rl-investigate-pivot` and `rl-investigate-hunt`.
 Do NOT perform sample pivots, certificate analytics, or YARA hunts — those are
 handled by your parallel counterparts.
 
-All Spectra Intelligence calls are made via the `rl-spectra-intel` CLI using
-the `Bash` tool.
+All Spectra calls are made through the canonical `rl-soc-cli` command using the
+`Bash` tool. `rl-soc-cli` is a symlink (managed by `rl-soc-connect`) that points
+at the active endpoint's wrapper, so you always call the same command regardless
+of which ReversingLabs service — Spectra Intelligence or Spectra Analyze — is
+configured.
+
+**Endpoint and available tools.** The orchestrator passes two values:
+- `SPECTRA_SERVICE` — the active service name (`Spectra Intelligence` or
+  `Spectra Analyze`), for labeling only.
+- `AVAILABLE_TOOLS` — the set of tool names discovered at run start via
+  `rl-soc-cli --list-tools`.
+
+**Before calling any tool, confirm it is in `AVAILABLE_TOOLS`. If it is not,
+skip that call and note its absence in your output — this is expected on some
+endpoints 
 
 ## CRITICAL CONSTRAINTS
 
-- **Use the `rl-spectra-intel` CLI via `Bash` for all Spectra calls.**
+- **Use the `rl-soc-cli` CLI via `Bash` for all Spectra calls.**
   Invocation pattern — always a single-line Bash call:
   ```bash
-  rl-spectra-intel <tool_name> --args '<json_kwargs>'
+  rl-soc-cli <tool_name> --args '<json_kwargs>'
   ```
   After every call, check the exit code:
   - **0** — success; stdout is JSON, parse it
@@ -50,13 +63,13 @@ the `Bash` tool.
 Take all file hashes from the triage IOC list and batch-enrich them:
 
 ```bash
-rl-spectra-intel bulk_file_reputation_lookup --args '{"hashes": ["<hash1>", "<hash2>", ...]}'
+rl-soc-cli bulk_file_reputation_lookup --args '{"hashes": ["<hash1>", "<hash2>", ...]}'
 ```
 
 For any hashes returned as malicious, fetch full detail:
 
 ```bash
-rl-spectra-intel get_sample_overview --args '{"hash_value": "<sha256>"}'
+rl-soc-cli get_sample_overview --args '{"hash_value": "<sha256>"}'
 ```
 
 Flag any IOC where the classification differs from what triage recorded — this
@@ -67,13 +80,13 @@ may indicate a recently-changed classification.
 Take all IPs, domains, and URLs from the triage IOC list and batch-enrich them:
 
 ```bash
-rl-spectra-intel bulk_network_reputation_lookup --args '{"indicators": ["<val1>", "<val2>", ...]}'
+rl-soc-cli bulk_network_reputation_lookup --args '{"indicators": ["<val1>", "<val2>", ...]}'
 ```
 
 For any confirmed-malicious indicators, fetch full intelligence context:
 
 ```bash
-rl-spectra-intel get_network_intelligence --args '{"indicator": "<value>"}'
+rl-soc-cli get_network_intelligence --args '{"indicator": "<value>"}'
 ```
 
 From the full intelligence response, capture GeoIP data: country, ASN, and
