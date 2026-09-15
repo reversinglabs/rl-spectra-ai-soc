@@ -7,6 +7,7 @@ description: >
   incident report. Use when you want a verdict without the full output.
   Triggers on "is this a FP", "potential FP", "FP/TP check", "evaluate this
   detection", "verdict only", or similar.
+user-invocable: true
 ---
 
 # verdict

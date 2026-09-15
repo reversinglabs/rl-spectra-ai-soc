@@ -1,6 +1,6 @@
 {
   "name": "rl-soc",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Multi-agent SOC workflow for threat analysis via the ReversingLabs SOC CLI. Takes a file, hash, or network indicator and runs triage, investigation, remediation guidance, and incident reporting using ReversingLabs Spectra Intelligence — no MCP server required.",
   "author": {
     "name": "ReversingLabs",

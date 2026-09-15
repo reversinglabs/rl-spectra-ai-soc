@@ -7,6 +7,7 @@ description: >
   hash", "investigate this URL", "is this malware", "run threat analysis on",
   "I got a suspicious file", or any submission of an indicator for end-to-end
   SOC workflow.
+user-invocable: true
 ---
 
 # full
